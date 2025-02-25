@@ -1,0 +1,45 @@
+import os
+import pandas as pd
+import reverse_geocoder as rg
+
+# --- 1. Load your CSV data ---
+input_file_path = "../content/gdrive/My Drive/Colab_Notebooks/5G_coverage/Simplified_Rand_Real.csv"
+df = pd.read_csv(input_file_path)
+
+#Get output directory and create if not exist
+output_dir = "../content/gdrive/My Drive/Colab_Notebooks/5GCoverageResults/"
+os.makedirs(output_dir, exist_ok=True) # Create the output directory if it doesn't exist
+
+# --- 2. Prepare coordinates for batch geocoding ---
+coordinates = list(zip(df['SiteLatitude_decDeg'], df['SiteLongitude_decDeg']))
+
+# --- 3. Perform batch reverse geocoding ---
+results = rg.search(coordinates)
+
+# --- 4. Extract state information and add to DataFrame ---
+states = []
+for result in results:
+    state = result.get('admin1')  # First try admin1
+    if state is None or state == "":
+        state = result.get('admin2')  # If admin1 is missing, try admin2
+        if state is None or state == "":
+            state = result.get('name', 'Not Found')  # If both are missing, use 'name' or 'Not Found'
+    states.append(state)
+
+df['State'] = states
+
+# --- 5. Separate into files by state ---
+for state in df['State'].unique():
+    if state != "Not Found":  # Skip 'Not Found' entries
+        state_df = df[df['State'] == state]
+        output_file_path = os.path.join(output_dir, f"{state}_sites.csv")
+        state_df.to_csv(output_file_path, index=False)
+        print(f"Created {output_file_path}")
+    else:
+        not_found_df = df[df['State'] == "Not Found"]
+        output_file_path = os.path.join(output_dir, "sites_not_found.csv")
+        not_found_df.to_csv(output_file_path, index=False)
+        print(f"Created {output_file_path}")
+
+# --- 6. (Optional) Display the first few rows with the new State column ---
+print(df.head())
